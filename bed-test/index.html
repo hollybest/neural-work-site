@@ -2,83 +2,153 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>3D тест кровати</title>
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.169.0/build/three.module.js"
-  }
-}
-</script>
 <style>
-html,body{margin:0;height:100%;overflow:hidden;background:#f4f1ec;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-#info{position:fixed;z-index:2;top:14px;left:14px;background:rgba(255,255,255,.92);padding:10px 12px;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.08)}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f3efe8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#info{position:fixed;z-index:2;top:14px;left:14px;background:rgba(255,255,255,.92);padding:10px 12px;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.08);pointer-events:none}
 #info b{display:block;font-size:16px;margin-bottom:2px}#info span{font-size:12px;color:#666}
-canvas{display:block;touch-action:none}
 </style>
 </head>
 <body>
-<div id="info"><b>Тестовая 3D-модель кровати</b><span>Поверни мышью/пальцем · масштаб — колесом/щипком</span></div>
-<script type="module">
-import * as THREE from 'three';
-import {OrbitControls} from 'https://unpkg.com/three@0.169.0/examples/jsm/controls/OrbitControls.js';
+<div id="info"><b>Тестовая 3D-модель кровати</b><span>Зажми и тяни · колесо/щипок — масштаб</span></div>
+<canvas id="c"></canvas>
+<script>
+(()=>{
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+let W=0,H=0,dpr=1,yaw=-0.65,pitch=-0.32,zoom=1,drag=false,lx=0,ly=0,lastDist=0;
 
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0xf4f1ec);
+const objs=[];
+const add=(x,y,z,w,h,d,c)=>objs.push({x,y,z,w,h,d,c});
+const beige=[183,163,142], light=[244,241,233], dark=[77,69,61], duvet=[231,226,217];
 
-const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,.1,100);
-camera.position.set(4.6,3.2,5.2);
+// base / mattress
+add(0,.42,0,2.25,.42,2.05,beige);
+add(0,.74,-.02,1.95,.22,1.82,light);
 
-const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.setSize(innerWidth,innerHeight);
-renderer.shadowMap.enabled=true;
-renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
+// headboard
+add(0,1.36,.96,2.25,1.48,.22,beige);
 
-const controls=new OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true;
-controls.target.set(0,.8,0);
-controls.minDistance=3;
-controls.maxDistance=10;
-controls.maxPolarAngle=Math.PI/2.02;
+// headboard cushions
+for(let i=0;i<5;i++) add(-.88+i*.44,1.34,.81,.36,1.20,.12,beige);
 
-scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2.2));
-const key=new THREE.DirectionalLight(0xffffff,2.4);
-key.position.set(4,7,5); key.castShadow=true; scene.add(key);
+// front cushions
+for(let i=0;i<5;i++) add(-.88+i*.44,.48,-1.02,.36,.50,.16,beige);
 
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.MeshStandardMaterial({color:0xe8e2d8,roughness:1}));
-floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
+// side cushions
+for(const x of [-1.05,1.05]) for(let j=0;j<4;j++) add(x,.48,-.63+j*.42,.16,.50,.34,beige);
 
-const beige=new THREE.MeshStandardMaterial({color:0xb7a38e,roughness:.88});
-const mattressMat=new THREE.MeshStandardMaterial({color:0xf4f1e9,roughness:.95});
-const dark=new THREE.MeshStandardMaterial({color:0x4d453d,roughness:.8});
+// feet
+for(const x of [-.92,.92]) for(const z of [-.82,.82]) add(x,.12,z,.10,.14,.10,dark);
 
-function box(size,pos,mat){
-  const m=new THREE.Mesh(new THREE.BoxGeometry(...size),mat);
-  m.position.set(...pos); m.castShadow=true; m.receiveShadow=true; scene.add(m); return m;
+// duvet
+add(0,.91,-.27,1.72,.12,1.05,duvet);
+
+// pillows (simplified as soft blocks)
+add(-.48,1.02,.46,.72,.18,.46,light);
+add(.48,1.02,.46,.72,.18,.46,light);
+
+const faces=[
+[0,1,2,3],[4,7,6,5],[0,4,5,1],[3,2,6,7],[1,5,6,2],[0,3,7,4]
+];
+const corners=[
+[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],
+[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]
+];
+
+function resize(){
+ dpr=Math.min(devicePixelRatio||1,2);
+ W=innerWidth;H=innerHeight;
+ canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);
+ canvas.style.width=W+'px';canvas.style.height=H+'px';
+ ctx.setTransform(dpr,0,0,dpr,0,0);
 }
-box([2.25,.42,2.05],[0,.38,0],beige);
-box([1.95,.22,1.82],[0,.70,-.02],mattressMat);
-box([2.25,1.48,.22],[0,1.28,.92],beige);
+addEventListener('resize',resize);resize();
 
-for(let i=0;i<5;i++){ const x=-.88+i*.44; box([.36,1.25,.12],[x,1.25,.78],beige); }
-for(let i=0;i<5;i++){ const x=-.88+i*.44; box([.36,.50,.16],[x,.43,-.98],beige); }
-for(const x of [-1.045,1.045]) for(let j=0;j<4;j++){ const z=-.62+j*.42; box([.16,.50,.34],[x,.43,z],beige); }
-for(const x of [-.92,.92]) for(const z of [-.82,.82]) box([.10,.12,.10],[x,.12,z],dark);
-
-function pillow(x,z,rot){
-  const g=new THREE.SphereGeometry(.34,32,16); g.scale(1.15,.42,.85);
-  const p=new THREE.Mesh(g,mattressMat); p.position.set(x,.93,z); p.rotation.y=rot; p.castShadow=true; scene.add(p);
+function rot(p){
+ let [x,y,z]=p;
+ let cy=Math.cos(yaw),sy=Math.sin(yaw);
+ let x1=x*cy-z*sy,z1=x*sy+z*cy;
+ let cp=Math.cos(pitch),sp=Math.sin(pitch);
+ let y1=y*cp-z1*sp,z2=y*sp+z1*cp;
+ return [x1,y1,z2];
 }
-pillow(-.48,.48,-.15); pillow(.48,.48,.15);
+function proj(p){
+ const dist=7.2;
+ const depth=p[2]+dist;
+ const s=Math.min(W,H)*1.35*zoom/depth;
+ return [W/2+p[0]*s,H*.58-p[1]*s,depth];
+}
+function shade(c,n){
+ const L=[-.35,-.75,-.55];
+ const len=Math.hypot(...n)||1; n=n.map(v=>v/len);
+ const l=Math.max(0, -(n[0]*L[0]+n[1]*L[1]+n[2]*L[2]));
+ const k=.62+.38*l;
+ return 'rgb('+c.map(v=>Math.max(0,Math.min(255,Math.round(v*k)))).join(',')+')';
+}
+function draw(){
+ ctx.clearRect(0,0,W,H);
 
-const duvet=new THREE.Mesh(new THREE.BoxGeometry(1.72,.12,1.05),new THREE.MeshStandardMaterial({color:0xe7e2d9,roughness:1}));
-duvet.position.set(0,.89,-.30); duvet.castShadow=true; scene.add(duvet);
+ // soft ground
+ const g=ctx.createRadialGradient(W/2,H*.78,10,W/2,H*.78,Math.min(W,H)*.48);
+ g.addColorStop(0,'rgba(120,105,90,.14)');g.addColorStop(1,'rgba(120,105,90,0)');
+ ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
 
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
-(function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)})();
+ const fs=[];
+ for(const o of objs){
+   const pts=corners.map(([cx,cy,cz])=>rot([
+     o.x+cx*o.w/2,
+     o.y+cy*o.h/2-.75,
+     o.z+cz*o.d/2
+   ]));
+   for(const f of faces){
+     const a=pts[f[0]],b=pts[f[1]],c=pts[f[2]];
+     const u=[b[0]-a[0],b[1]-a[1],b[2]-a[2]];
+     const v=[c[0]-a[0],c[1]-a[1],c[2]-a[2]];
+     const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+     const pp=f.map(i=>proj(pts[i]));
+     const depth=pp.reduce((s,p)=>s+p[2],0)/pp.length;
+     fs.push({pp,depth,color:shade(o.c,n)});
+   }
+ }
+ fs.sort((a,b)=>b.depth-a.depth);
+ ctx.lineJoin='round';
+ for(const f of fs){
+   ctx.beginPath();ctx.moveTo(f.pp[0][0],f.pp[0][1]);
+   for(let i=1;i<f.pp.length;i++)ctx.lineTo(f.pp[i][0],f.pp[i][1]);
+   ctx.closePath();ctx.fillStyle=f.color;ctx.fill();
+   ctx.strokeStyle='rgba(80,70,60,.12)';ctx.lineWidth=.7;ctx.stroke();
+ }
+ requestAnimationFrame(draw);
+}
+draw();
+
+canvas.addEventListener('pointerdown',e=>{drag=true;lx=e.clientX;ly=e.clientY;canvas.setPointerCapture(e.pointerId)});
+canvas.addEventListener('pointermove',e=>{
+ if(!drag)return;
+ yaw+=(e.clientX-lx)*.008;
+ pitch=Math.max(-1.15,Math.min(.18,pitch+(e.clientY-ly)*.006));
+ lx=e.clientX;ly=e.clientY;
+});
+canvas.addEventListener('pointerup',()=>drag=false);
+canvas.addEventListener('pointercancel',()=>drag=false);
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.6,Math.min(2.2,zoom*Math.exp(-e.deltaY*.001)));},{passive:false});
+
+canvas.addEventListener('touchstart',e=>{
+ if(e.touches.length===2){
+   lastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+ }
+},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+ if(e.touches.length===2){
+   e.preventDefault();
+   const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+   if(lastDist) zoom=Math.max(.6,Math.min(2.2,zoom*d/lastDist));
+   lastDist=d;
+ }
+},{passive:false});
+})();
 </script>
 </body>
 </html>
