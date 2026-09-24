@@ -4,29 +4,37 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>3D тест кровати</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.169.0/build/three.module.js"
+  }
+}
+</script>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#f4f1ec;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-#info{position:fixed;z-index:2;top:14px;left:14px;background:rgba(255,255,255,.9);padding:10px 12px;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.08)}
+#info{position:fixed;z-index:2;top:14px;left:14px;background:rgba(255,255,255,.92);padding:10px 12px;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.08)}
 #info b{display:block;font-size:16px;margin-bottom:2px}#info span{font-size:12px;color:#666}
-canvas{display:block}
+canvas{display:block;touch-action:none}
 </style>
 </head>
 <body>
 <div id="info"><b>Тестовая 3D-модель кровати</b><span>Поверни мышью/пальцем · масштаб — колесом/щипком</span></div>
 <script type="module">
-import * as THREE from 'https://unpkg.com/three@0.169.0/build/three.module.js';
+import * as THREE from 'three';
 import {OrbitControls} from 'https://unpkg.com/three@0.169.0/examples/jsm/controls/OrbitControls.js';
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0xf4f1ec);
 
 const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,.1,100);
-camera.position.set(5,3.4,5.5);
+camera.position.set(4.6,3.2,5.2);
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const controls=new OrbitControls(camera,renderer.domElement);
@@ -34,81 +42,43 @@ controls.enableDamping=true;
 controls.target.set(0,.8,0);
 controls.minDistance=3;
 controls.maxDistance=10;
-controls.maxPolarAngle=Math.PI/2.05;
+controls.maxPolarAngle=Math.PI/2.02;
 
-scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2.1));
-const key=new THREE.DirectionalLight(0xffffff,2.2);
+scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2.2));
+const key=new THREE.DirectionalLight(0xffffff,2.4);
 key.position.set(4,7,5); key.castShadow=true; scene.add(key);
 
-const floor=new THREE.Mesh(
-  new THREE.PlaneGeometry(20,20),
-  new THREE.MeshStandardMaterial({color:0xe8e2d8,roughness:1})
-);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.MeshStandardMaterial({color:0xe8e2d8,roughness:1}));
 floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
 
-const beige=new THREE.MeshStandardMaterial({color:0xb7a38e,roughness:.88,metalness:0});
+const beige=new THREE.MeshStandardMaterial({color:0xb7a38e,roughness:.88});
 const mattressMat=new THREE.MeshStandardMaterial({color:0xf4f1e9,roughness:.95});
 const dark=new THREE.MeshStandardMaterial({color:0x4d453d,roughness:.8});
 
-function box(size,pos,mat,round=0){
-  const g=new THREE.BoxGeometry(...size);
-  const m=new THREE.Mesh(g,mat);
+function box(size,pos,mat){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(...size),mat);
   m.position.set(...pos); m.castShadow=true; m.receiveShadow=true; scene.add(m); return m;
 }
-
-// base + mattress
 box([2.25,.42,2.05],[0,.38,0],beige);
 box([1.95,.22,1.82],[0,.70,-.02],mattressMat);
-
-// headboard
 box([2.25,1.48,.22],[0,1.28,.92],beige);
 
-// padded headboard strips
-for(let i=0;i<5;i++){
-  const x=-.88+i*.44;
-  box([.36,1.25,.12],[x,1.25,.78],beige);
-}
-
-// front padded segments
-for(let i=0;i<5;i++){
-  const x=-.88+i*.44;
-  box([.36,.50,.16],[x,.43,-.98],beige);
-}
-
-// side padded segments
-for(const x of [-1.045,1.045]){
-  for(let j=0;j<4;j++){
-    const z=-.62+j*.42;
-    box([.16,.50,.34],[x,.43,z],beige);
-  }
-}
-
-// feet
+for(let i=0;i<5;i++){ const x=-.88+i*.44; box([.36,1.25,.12],[x,1.25,.78],beige); }
+for(let i=0;i<5;i++){ const x=-.88+i*.44; box([.36,.50,.16],[x,.43,-.98],beige); }
+for(const x of [-1.045,1.045]) for(let j=0;j<4;j++){ const z=-.62+j*.42; box([.16,.50,.34],[x,.43,z],beige); }
 for(const x of [-.92,.92]) for(const z of [-.82,.82]) box([.10,.12,.10],[x,.12,z],dark);
 
-// pillows for a more recognisable bed silhouette
 function pillow(x,z,rot){
-  const g=new THREE.SphereGeometry(.34,32,16);
-  g.scale(1.15,.42,.85);
-  const p=new THREE.Mesh(g,mattressMat);
-  p.position.set(x,.93,z); p.rotation.y=rot; p.castShadow=true; scene.add(p);
+  const g=new THREE.SphereGeometry(.34,32,16); g.scale(1.15,.42,.85);
+  const p=new THREE.Mesh(g,mattressMat); p.position.set(x,.93,z); p.rotation.y=rot; p.castShadow=true; scene.add(p);
 }
 pillow(-.48,.48,-.15); pillow(.48,.48,.15);
 
-// duvet
-const duvet=new THREE.Mesh(
-  new THREE.BoxGeometry(1.72,.12,1.05),
-  new THREE.MeshStandardMaterial({color:0xe7e2d9,roughness:1})
-);
+const duvet=new THREE.Mesh(new THREE.BoxGeometry(1.72,.12,1.05),new THREE.MeshStandardMaterial({color:0xe7e2d9,roughness:1}));
 duvet.position.set(0,.89,-.30); duvet.castShadow=true; scene.add(duvet);
 
-addEventListener('resize',()=>{
-  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
-});
-
-function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}
-animate();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+(function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)})();
 </script>
 </body>
 </html>
